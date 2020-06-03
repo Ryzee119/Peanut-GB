@@ -3,6 +3,10 @@
 *.gcda
 *.a
 *.exe
+*.iso
+*.d
+*.obj
+ports/xbox/bin
 peanut-sdl
 peanut-debug
 tags
