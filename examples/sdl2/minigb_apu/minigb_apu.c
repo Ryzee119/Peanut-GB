@@ -393,7 +393,11 @@ static void chan_trigger(uint_fast8_t i)
 				       (128.0f / (float)(c->sweep.rate)) /
 					       AUDIO_SAMPLE_RATE :
 				       0;
+		#ifdef NXDK
+		c->sweep.counter = 1.0000000001f; //FIXME. nexttowardf not implemented in NXDK
+		#else
 		c->sweep.counter = nexttowardf(1.0f, 1.1f);
+		#endif
 	}
 
 	int len_max = 64;
