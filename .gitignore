@@ -3,6 +3,16 @@
 *.gcda
 *.a
 *.exe
+*.iso
+*.d
+*.obj
+*.gb
+*.gbc
+*.sav
+*.xbe
+*.lib
+ports/xbox/bin
 peanut-sdl
 peanut-debug
 tags
+.vscode
