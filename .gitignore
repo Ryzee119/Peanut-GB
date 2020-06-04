@@ -6,7 +6,11 @@
 *.iso
 *.d
 *.obj
+*.gb
+*.gbc
+*.sav
 ports/xbox/bin
 peanut-sdl
 peanut-debug
 tags
+.vscode

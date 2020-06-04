@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <SDL2/SDL.h>
+#include <SDL.h>
 
 #ifdef ENABLE_SOUND_BLARGG
 #	include "blargg_apu/audio.h"
@@ -23,6 +23,19 @@
 
 #include "../../peanut_gb.h"
 #include "nativefiledialog/src/include/nfd.h"
+
+
+#ifdef NXDK
+#define printf(fmt, ...) debugPrint(fmt, __VA_ARGS__);
+#define puts(a) debugPrint(a)
+#include <assert.h>
+#include <windows.h>
+#include <SDL.h>
+#include <nxdk/mount.h>
+#include <hal/xbox.h>
+#include <hal/video.h>
+#include <hal/debug.h>
+#endif
 
 struct priv_t
 {
@@ -597,6 +610,23 @@ void save_lcd_bmp(struct gb_s* gb, uint16_t fb[LCD_HEIGHT][LCD_WIDTH])
 
 int main(int argc, char **argv)
 {
+	#ifdef NXDK
+	XVideoSetMode(640, 480, 15, REFRESH_DEFAULT);
+	size_t fb_size = 640 * 480 * sizeof(uint16_t);
+	extern uint8_t* _fb;
+	_fb = (uint8_t*)MmAllocateContiguousMemoryEx(fb_size,
+	                                            0,
+	                                            0xFFFFFFFF,
+	                                            0x1000,
+	                                            PAGE_READWRITE | PAGE_WRITECOMBINE);
+	memset(_fb, 0x00, fb_size);
+
+	#define _PCRTC_START 0xFD600800
+	*(unsigned int*)(_PCRTC_START) = (unsigned int)_fb & 0x03FFFFFF;
+	BOOL mounted = nxMountDrive('E', "\\Device\\Harddisk0\\Partition1\\");
+	assert(mounted);
+	#endif
+
 	struct gb_s gb;
 	struct priv_t priv =
 	{
@@ -622,6 +652,18 @@ int main(int argc, char **argv)
 	char *save_file_name = NULL;
 	int ret = EXIT_SUCCESS;
 
+#ifdef NXDK
+	//XBOX PORT TODO:
+	//SELECTION MENU TO SELECT ROM
+	char* rom_name = "D:\\tetris.gb";
+	//char* save_name = "E:\\tetris.sav";
+
+	rom_file_name = malloc(strlen(rom_name)+1);
+	//save_file_name = malloc(strlen(save_name)+1);
+
+	strcpy(rom_file_name,rom_name);
+	//strcpy(save_file_name,save_name);
+#else
 	switch(argc)
 	{
 #if ENABLE_FILE_GUI
@@ -671,6 +713,7 @@ int main(int argc, char **argv)
 		goto out;
 	}
 
+#endif
 	/* Copy input ROM file to allocated memory. */
 	if((priv.rom = read_rom_to_ram(rom_file_name)) == NULL)
 	{
@@ -773,7 +816,8 @@ int main(int argc, char **argv)
 #ifdef _POSIX_C_SOURCE
 		gb_set_rtc(&gb, &timeinfo);
 #else
-		gb_set_rtc(&gb, timeinfo);
+		if(timeinfo)
+			gb_set_rtc(&gb, timeinfo);
 #endif
 	}
 
@@ -822,11 +866,13 @@ int main(int argc, char **argv)
 	/* Allow the joystick input even if game is in background. */
 	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 
+	#ifndef NXDK
 	if(SDL_GameControllerAddMappingsFromFile("gamecontrollerdb.txt") < 0)
 	{
 		printf("Unable to assign joystick mappings: %s\n",
 		       SDL_GetError());
 	}
+	#endif
 
 	/* Open the first available controller. */
 	for(int i = 0; i < SDL_NumJoysticks(); i++)
@@ -855,11 +901,19 @@ int main(int argc, char **argv)
 		printf("ROM: %s\n", gb_get_rom_name(&gb, title_str + 12));
 		printf("MBC: %d\n", gb.mbc);
 
+		#ifdef NXDK
+		window = SDL_CreateWindow(title_str,
+					  SDL_WINDOWPOS_UNDEFINED,
+					  SDL_WINDOWPOS_UNDEFINED,
+					  640, 480,
+					  SDL_WINDOW_SHOWN);
+		#else
 		window = SDL_CreateWindow(title_str,
 					  SDL_WINDOWPOS_UNDEFINED,
 					  SDL_WINDOWPOS_UNDEFINED,
 					  LCD_WIDTH * 2, LCD_HEIGHT * 2,
 					  SDL_WINDOW_RESIZABLE | SDL_WINDOW_INPUT_FOCUS);
+		#endif
 
 		if(window == NULL)
 		{
@@ -872,8 +926,12 @@ int main(int argc, char **argv)
 
 	SDL_SetWindowMinimumSize(window, LCD_WIDTH, LCD_HEIGHT);
 
+	#ifdef NXDK
+	renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+	#else
 	renderer = SDL_CreateRenderer(window, -1,
 				      SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+	#endif
 
 	if(renderer == NULL)
 	{
@@ -916,6 +974,10 @@ int main(int argc, char **argv)
 
 	auto_assign_palette(&priv, gb_colour_hash(&gb));
 
+	#ifdef NXDK
+	//Force frame skip to target 30fps instead of 60 for og xbox
+	gb.direct.frame_skip = 1;
+	#endif
 	while(running)
 	{
 		int delay;
@@ -975,6 +1037,12 @@ int main(int argc, char **argv)
 					break;
 				}
 
+				//XBOX PORT TODO:
+				//ADD BUTTONS FOR FRAME SKIP TOGGLEING
+				//ADD BUTTON FOR FAST MODE TOGGLING fast_mode = 1 to 4
+				//ADD BUTTON FOR GB RESET
+				//ADD BUTTON FOR SCREENSHOT
+				//ADD BUTTON FOR PALLETE CYCLING
 				break;
 
 			case SDL_KEYDOWN:

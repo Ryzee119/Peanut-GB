@@ -379,7 +379,7 @@ struct gb_s
 			LCD_VBLANK = 1,
 			LCD_SEARCH_OAM = 2,
 			LCD_TRANSFER = 3
-		}				lcd_mode : 2;
+		}				lcd_mode : 3; //: 2 to : 3 needed for NXDK compiler
 	};
 
 	/* Cartridge information:

@@ -18,4 +18,3 @@ include $(NXDK_DIR)/Makefile
 
 copy_resources:
 	@mkdir -p $(OUTPUT_DIR)
-	@mkdir -p $(OUTPUT_DIR)/xbox
