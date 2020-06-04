@@ -9,6 +9,7 @@
 *.gb
 *.gbc
 *.sav
+*.xbe
 ports/xbox/bin
 peanut-sdl
 peanut-debug
