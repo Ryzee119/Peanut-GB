@@ -26,7 +26,9 @@
 
 
 #ifdef NXDK
-#define printf(fmt, ...) debugPrint(fmt, __VA_ARGS__);
+extern int nextRow;
+extern int nextCol;
+#define printf(fmt, ...) do { nextRow = 0; debugPrint(fmt, __VA_ARGS__);  } while(0)
 #define puts(a) debugPrint(a)
 #include <assert.h>
 #include <windows.h>
@@ -582,9 +584,13 @@ void save_lcd_bmp(struct gb_s* gb, uint16_t fb[LCD_HEIGHT][LCD_WIDTH])
 	char file_name[32];
 	char title_str[16];
 	FILE* f;
-
+	#ifdef NXDK
+	snprintf(file_name, 32, "E:\\%.16s_%010ld.bmp",
+		 gb_get_rom_name(gb, title_str), file_num);
+	#else
 	snprintf(file_name, 32, "%.16s_%010ld.bmp",
 		 gb_get_rom_name(gb, title_str), file_num);
+	#endif
 
 	f = fopen(file_name, "wb");
 
@@ -655,14 +661,14 @@ int main(int argc, char **argv)
 #ifdef NXDK
 	//XBOX PORT TODO:
 	//SELECTION MENU TO SELECT ROM
-	char* rom_name = "D:\\tetris.gb";
-	//char* save_name = "E:\\tetris.sav";
+	char* rom_name = "D:\\rom.gb";
+	char* save_name = "E:\\rom.sav";
 
 	rom_file_name = malloc(strlen(rom_name)+1);
-	//save_file_name = malloc(strlen(save_name)+1);
+	save_file_name = malloc(strlen(save_name)+1);
 
 	strcpy(rom_file_name,rom_name);
-	//strcpy(save_file_name,save_name);
+	strcpy(save_file_name,save_name);
 #else
 	switch(argc)
 	{
@@ -1018,10 +1024,17 @@ int main(int argc, char **argv)
 
 				case SDL_CONTROLLER_BUTTON_START:
 					gb.direct.joypad_bits.start = !event.cbutton.state;
+					if (!gb.direct.joypad_bits.select && event.type == SDL_CONTROLLERBUTTONDOWN)
+						gb_reset(&gb);
 					break;
 
 				case SDL_CONTROLLER_BUTTON_DPAD_UP:
 					gb.direct.joypad_bits.up = !event.cbutton.state;
+					if (!gb.direct.joypad_bits.select && event.type == SDL_CONTROLLERBUTTONDOWN){
+						if(++selected_palette == NUMBER_OF_PALETTES)
+							selected_palette = 0;
+						manual_assign_palette(&priv, selected_palette);
+					}
 					break;
 
 				case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
@@ -1035,14 +1048,25 @@ int main(int argc, char **argv)
 				case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
 					gb.direct.joypad_bits.left = !event.cbutton.state;
 					break;
-				}
 
-				//XBOX PORT TODO:
-				//ADD BUTTONS FOR FRAME SKIP TOGGLEING
-				//ADD BUTTON FOR FAST MODE TOGGLING fast_mode = 1 to 4
-				//ADD BUTTON FOR GB RESET
-				//ADD BUTTON FOR SCREENSHOT
-				//ADD BUTTON FOR PALLETE CYCLING
+				case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+					if (fast_mode > 1) fast_mode--;
+					break;
+
+				case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+					if (fast_mode < 4) fast_mode++;
+					break;
+
+				case SDL_CONTROLLER_BUTTON_Y:
+					if (gb.direct.joypad_bits.select && event.type == SDL_CONTROLLERBUTTONDOWN){
+						gb.direct.frame_skip = ~gb.direct.frame_skip;
+						printf("Frame skip %u\n", gb.direct.frame_skip);
+						SDL_Delay(100);
+					} else if (!gb.direct.joypad_bits.select && event.type == SDL_CONTROLLERBUTTONDOWN){
+						dump_bmp = ~dump_bmp;
+					}
+					break;
+				}
 				break;
 
 			case SDL_KEYDOWN:
@@ -1251,8 +1275,12 @@ int main(int argc, char **argv)
 		SDL_RenderCopy(renderer, texture, NULL, NULL);
 		SDL_RenderPresent(renderer);
 
-		if(dump_bmp)
+		if(dump_bmp){
+			printf("Saving screenshot\n");
 			save_lcd_bmp(&gb, priv.fb);
+			dump_bmp = 0;
+			SDL_Delay(200);
+		}
 
 #endif
 
@@ -1286,32 +1314,6 @@ int main(int argc, char **argv)
 			{
 				rtc_timer -= 1000;
 				gb_tick_rtc(&gb);
-
-				/* If 60 seconds has passed, record save file.
-				 * We do this because the external audio library
-				 * used contains asserts that will abort the
-				 * program without save.
-				 * TODO: Remove use of assert in audio library
-				 * in release build. */
-				/* TODO: Remove all workarounds due to faulty
-				 * external libraries. */
-				--save_timer;
-
-				if(!save_timer)
-				{
-#if ENABLE_SOUND_BLARGG
-					/* Locking the audio thread to reduce
-					 * possibility of abort during save. */
-					SDL_LockAudioDevice(dev);
-#endif
-					write_cart_ram_file(save_file_name,
-							    &priv.cart_ram,
-							    gb_get_save_size(&gb));
-#if ENABLE_SOUND_BLARGG
-					SDL_UnlockAudioDevice(dev);
-#endif
-					save_timer = 60;
-				}
 			}
 
 			/* This will delay for at least the number of
@@ -1322,6 +1324,31 @@ int main(int argc, char **argv)
 			after_delay_ticks = SDL_GetTicks();
 			speed_compensation += (double)delay -
 					      (int)(after_delay_ticks - delay_ticks);
+		}
+
+		/* If 10 seconds has passed, record save file.
+		 * We do this because the external audio library
+		 * used contains asserts that will abort the
+		 * program without save.
+		 * TODO: Remove use of assert in audio library
+		 * in release build. */
+		/* TODO: Remove all workarounds due to faulty
+		 * external libraries. */
+		static int save_timer = 0;
+		if(SDL_GetTicks() - save_timer > 10000)
+		{
+#if ENABLE_SOUND_BLARGG
+			/* Locking the audio thread to reduce
+			 * possibility of abort during save. */
+			SDL_LockAudioDevice(dev);
+#endif
+			write_cart_ram_file(save_file_name,
+					    &priv.cart_ram,
+					    gb_get_save_size(&gb));
+#if ENABLE_SOUND_BLARGG
+			SDL_UnlockAudioDevice(dev);
+#endif
+			save_timer = SDL_GetTicks();
 		}
 	}
 
