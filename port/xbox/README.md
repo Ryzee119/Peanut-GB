@@ -32,3 +32,4 @@ Controls are as expected, with some additions:
  - Y - Toggle Frame Skip on or Off
  - BACK+START - Reset Gameboy
  - BACK+Y - Save screenshot to E:\
+  - BACK+DUP - Cycle through color palettes
