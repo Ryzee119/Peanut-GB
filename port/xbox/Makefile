@@ -18,3 +18,7 @@ include $(NXDK_DIR)/Makefile
 
 copy_resources:
 	@mkdir -p $(OUTPUT_DIR)
+	@mkdir -p $(OUTPUT_DIR)/Roms
+	@mkdir -p $(OUTPUT_DIR)/Screenshots
+	@mkdir -p $(OUTPUT_DIR)/Saves
+	@cp font.ttf $(OUTPUT_DIR)/

@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include <SDL.h>
+#include <SDL_ttf.h>
 
 #ifdef ENABLE_SOUND_BLARGG
 #	include "blargg_apu/audio.h"
@@ -22,14 +23,19 @@
 #endif
 
 #include "../../peanut_gb.h"
+
+#ifndef NXDK
 #include "nativefiledialog/src/include/nfd.h"
-
-
-#ifdef NXDK
+#else
+#define XBOX_SAVE_PATH "D:\\Saves"
+#define XBOX_ROM_PATH "D:\\Roms"
+#define XBOX_SCREENSHOT_PATH "D:\\Screenshots"
 extern int nextRow;
 extern int nextCol;
-#define printf(fmt, ...) do { nextRow = 0; debugPrint(fmt, __VA_ARGS__);  } while(0)
+#ifdef DEBUG
+#define printf(fmt, ...) do { /*nextRow = 0;*/ debugPrint(fmt, __VA_ARGS__); Sleep(100); } while(0)
 #define puts(a) debugPrint(a)
+#endif
 #include <assert.h>
 #include <windows.h>
 #include <SDL.h>
@@ -153,12 +159,14 @@ void write_cart_ram_file(const char *save_file_name, uint8_t **dest,
 	{
 		puts("Unable to open save file.");
 		printf("%d: %s\n", __LINE__, strerror(errno));
-		exit(EXIT_FAILURE);
+		//exit(EXIT_FAILURE);
 	}
 
 	/* Record save file. */
-	fwrite(*dest, sizeof(uint8_t), len, f);
-	fclose(f);
+	if(f){
+		fwrite(*dest, sizeof(uint8_t), len, f);
+		fclose(f);
+	}
 }
 
 /**
@@ -581,12 +589,12 @@ void save_lcd_bmp(struct gb_s* gb, uint16_t fb[LCD_HEIGHT][LCD_WIDTH])
 {
 	/* Should be enough to record up to 828 days worth of frames. */
 	static uint_fast32_t file_num = 0;
-	char file_name[32];
+	char file_name[256];
 	char title_str[16];
 	FILE* f;
 	#ifdef NXDK
-	snprintf(file_name, 32, "E:\\%.16s_%010ld.bmp",
-		 gb_get_rom_name(gb, title_str), file_num);
+	snprintf(file_name, 256, "%s\\%.16s_%010ld.bmp",
+		 XBOX_SCREENSHOT_PATH, gb_get_rom_name(gb, title_str), file_num);
 	#else
 	snprintf(file_name, 32, "%.16s_%010ld.bmp",
 		 gb_get_rom_name(gb, title_str), file_num);
@@ -603,15 +611,16 @@ void save_lcd_bmp(struct gb_s* gb, uint16_t fb[LCD_HEIGHT][LCD_WIDTH])
 		0x00, 0x00, 0x00, 0x00
 	};
 
-	fwrite(bmp_hdr_rgb555, sizeof(uint8_t), sizeof(bmp_hdr_rgb555), f);
-	fwrite(fb, sizeof(uint16_t), LCD_HEIGHT * LCD_WIDTH, f);
-	fclose(f);
+	if (f){
+		fwrite(bmp_hdr_rgb555, sizeof(uint8_t), sizeof(bmp_hdr_rgb555), f);
+		fwrite(fb, sizeof(uint16_t), LCD_HEIGHT * LCD_WIDTH, f);
+		fclose(f);
+		file_num++;
 
-	file_num++;
-
-	/* Each dot shows a new frame being saved. */
-	putc('.', stdout);
-	fflush(stdout);
+		/* Each dot shows a new frame being saved. */
+		putc('.', stdout);
+		fflush(stdout);
+	}
 }
 
 int main(int argc, char **argv)
@@ -631,6 +640,13 @@ int main(int argc, char **argv)
 	*(unsigned int*)(_PCRTC_START) = (unsigned int)_fb & 0x03FFFFFF;
 	BOOL mounted = nxMountDrive('E', "\\Device\\Harddisk0\\Partition1\\");
 	assert(mounted);
+	CreateDirectoryA(XBOX_SAVE_PATH, NULL);
+	CreateDirectoryA(XBOX_SCREENSHOT_PATH, NULL);
+	CreateDirectoryA(XBOX_ROM_PATH, NULL);
+
+	printf("Created %s\n",XBOX_SAVE_PATH);
+	printf("Created %s\n",XBOX_SCREENSHOT_PATH);
+	printf("Created %s\n",XBOX_ROM_PATH);
 	#endif
 
 	struct gb_s gb;
@@ -661,14 +677,10 @@ int main(int argc, char **argv)
 #ifdef NXDK
 	//XBOX PORT TODO:
 	//SELECTION MENU TO SELECT ROM
-	char* rom_name = "D:\\rom.gb";
-	char* save_name = "E:\\rom.sav";
-
-	rom_file_name = malloc(strlen(rom_name)+1);
-	save_file_name = malloc(strlen(save_name)+1);
-
-	strcpy(rom_file_name,rom_name);
-	strcpy(save_file_name,save_name);
+	char* rom_name = "rom.gb";
+	rom_file_name = malloc(strlen(XBOX_ROM_PATH) + 1 + strlen(rom_name)+1);
+	sprintf(rom_file_name,"%s\\%s", XBOX_ROM_PATH, rom_name);
+	printf("Opening %s\n",rom_file_name);
 #else
 	switch(argc)
 	{
@@ -737,7 +749,11 @@ int main(int argc, char **argv)
 
 		/* Allocate enough space for the ROM file name, for the "sav"
 		 * extension and for the null terminator. */
+		#ifdef NXDK
+		save_file_name = malloc(strlen(XBOX_SAVE_PATH) + 1 + strlen(rom_name) + strlen(extension) + 1);
+		#else
 		save_file_name = malloc(strlen(rom_file_name) + strlen(extension) + 1);
+		#endif
 
 		if(save_file_name == NULL)
 		{
@@ -747,7 +763,11 @@ int main(int argc, char **argv)
 		}
 
 		/* Copy the ROM file name to allocated space. */
+		#ifdef NXDK
+		sprintf(save_file_name,"%s\\%s", XBOX_SAVE_PATH, rom_name);
+		#else
 		strcpy(save_file_name, rom_file_name);
+		#endif
 
 		/* If the file name does not have a dot, or the only dot is at
 		 * the start of the file name, set the pointer to begin
@@ -760,6 +780,9 @@ int main(int argc, char **argv)
 		/* Copy extension to string including terminating null byte. */
 		for(unsigned int i = 0; i <= strlen(extension); i++)
 			*(str_replace++) = extension[i];
+
+		printf("Save file name will be %s\n",save_file_name);
+
 	}
 
 	/* TODO: Sanity check input GB file. */
@@ -984,11 +1007,32 @@ int main(int argc, char **argv)
 	//Force frame skip to target 30fps instead of 60 for og xbox
 	gb.direct.frame_skip = 1;
 	#endif
+
+	TTF_Init();
+	TTF_Font* font = TTF_OpenFont("D:\\font.ttf", 20);
+	if (font == NULL) {
+		debugPrint("Couldn't load font: %s", TTF_GetError());
+		while(1);
+	}
+
+	SDL_Color White = {255, 255, 255};
+	SDL_Color Black = {0, 0, 0};
+	SDL_Surface* message_surface;
+	SDL_Texture* message_texture;
+	SDL_Rect message_rect; //create a rect
+	message_rect.x = 0;
+	message_rect.y = 0;
+	char message_text[32] = {0};
+	unsigned int message_timer = 0;
+
+	snprintf(message_text, sizeof(message_text), "STARTING %s", rom_name);
+	message_timer = SDL_GetTicks();
+
 	while(running)
 	{
 		int delay;
 		static unsigned int rtc_timer = 0;
-		static unsigned int selected_palette = 3;
+		static int selected_palette = 3;
 		static unsigned int dump_bmp = 0;
 
 		/* Calculate the time taken to draw frame, then later add a
@@ -1024,8 +1068,12 @@ int main(int argc, char **argv)
 
 				case SDL_CONTROLLER_BUTTON_START:
 					gb.direct.joypad_bits.start = !event.cbutton.state;
-					if (!gb.direct.joypad_bits.select && event.type == SDL_CONTROLLERBUTTONDOWN)
+					if (!gb.direct.joypad_bits.select && event.type == SDL_CONTROLLERBUTTONDOWN){
+						snprintf(message_text, sizeof(message_text), "SAVING RAM TO %s", save_file_name);
+						message_timer = SDL_GetTicks();
+						write_cart_ram_file(save_file_name, &priv.cart_ram, gb_get_save_size(&gb));
 						gb_reset(&gb);
+					}
 					break;
 
 				case SDL_CONTROLLER_BUTTON_DPAD_UP:
@@ -1034,34 +1082,60 @@ int main(int argc, char **argv)
 						if(++selected_palette == NUMBER_OF_PALETTES)
 							selected_palette = 0;
 						manual_assign_palette(&priv, selected_palette);
+						snprintf(message_text, sizeof(message_text), "PALETTE %u", selected_palette);
+						message_timer = SDL_GetTicks();
 					}
 					break;
 
 				case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
 					gb.direct.joypad_bits.right = !event.cbutton.state;
+					if (!gb.direct.joypad_bits.select && event.type == SDL_CONTROLLERBUTTONDOWN){
+						auto_assign_palette(&priv, gb_colour_hash(&gb));
+						snprintf(message_text, sizeof(message_text), "ASSIGN AUTO PALETTE");
+						message_timer = SDL_GetTicks();
+					}
 					break;
 
 				case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
 					gb.direct.joypad_bits.down = !event.cbutton.state;
+					if (!gb.direct.joypad_bits.select && event.type == SDL_CONTROLLERBUTTONDOWN){
+						if(--selected_palette < 0)
+							selected_palette = NUMBER_OF_PALETTES - 1;
+						manual_assign_palette(&priv, selected_palette);
+						snprintf(message_text, sizeof(message_text), "PALETTE %u", selected_palette);
+						message_timer = SDL_GetTicks();
+					}
 					break;
 
 				case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
 					gb.direct.joypad_bits.left = !event.cbutton.state;
+					if (!gb.direct.joypad_bits.select && event.type == SDL_CONTROLLERBUTTONDOWN){
+						auto_assign_palette(&priv, gb_colour_hash(&gb));
+						snprintf(message_text, sizeof(message_text), "ASSIGN AUTO PALETTE");
+						message_timer = SDL_GetTicks();
+					}
 					break;
 
 				case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
-					if (fast_mode > 1) fast_mode--;
+					if (fast_mode > 1 && event.type == SDL_CONTROLLERBUTTONDOWN) fast_mode--;
+					snprintf(message_text, sizeof(message_text), "SPEED %u", fast_mode);
+					message_timer = SDL_GetTicks();
 					break;
 
 				case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
-					if (fast_mode < 4) fast_mode++;
+					if (fast_mode < 4 && event.type == SDL_CONTROLLERBUTTONDOWN) fast_mode++;
+					snprintf(message_text, sizeof(message_text), "SPEED %u", fast_mode);
+					message_timer = SDL_GetTicks();
 					break;
 
 				case SDL_CONTROLLER_BUTTON_Y:
 					if (gb.direct.joypad_bits.select && event.type == SDL_CONTROLLERBUTTONDOWN){
 						gb.direct.frame_skip = ~gb.direct.frame_skip;
-						printf("Frame skip %u\n", gb.direct.frame_skip);
-						SDL_Delay(100);
+
+						if(gb.direct.frame_skip)  strncpy(message_text, "FRAMESKIP ON", sizeof(message_text));
+						if(!gb.direct.frame_skip) strncpy(message_text, "FRAMESKIP OFF", sizeof(message_text));
+						message_timer = SDL_GetTicks();
+
 					} else if (!gb.direct.joypad_bits.select && event.type == SDL_CONTROLLERBUTTONDOWN){
 						dump_bmp = ~dump_bmp;
 					}
@@ -1272,14 +1346,32 @@ int main(int argc, char **argv)
 		/* Copy frame buffer to SDL screen. */
 		SDL_UpdateTexture(texture, NULL, &priv.fb, LCD_WIDTH * sizeof(uint16_t));
 		SDL_RenderClear(renderer);
+
+		/* Create message box to display text */
+		if(SDL_GetTicks() - message_timer > 1000)
+			message_text[0]='\0';
+		message_surface = TTF_RenderText_Shaded(font, message_text, White, Black);
+		message_texture = SDL_CreateTextureFromSurface(renderer, message_surface);
+		SDL_QueryTexture(message_texture, NULL, NULL, &message_rect.w, &message_rect.h);
+		message_rect.w /= 3;
+		message_rect.h /= 3;
+
+		/* Copy the GB frame buffer to the renderer */
 		SDL_RenderCopy(renderer, texture, NULL, NULL);
+
+		/* Copy the message box to the renderer */
+		SDL_RenderCopy(renderer, message_texture, NULL, &message_rect);
+
 		SDL_RenderPresent(renderer);
 
+		SDL_FreeSurface(message_surface);
+		SDL_DestroyTexture(message_texture);
+
 		if(dump_bmp){
-			printf("Saving screenshot\n");
+			strncpy(message_text, "SAVING SCREENSHOT...", sizeof(message_text));
+			message_timer = SDL_GetTicks();
 			save_lcd_bmp(&gb, priv.fb);
 			dump_bmp = 0;
-			SDL_Delay(200);
 		}
 
 #endif
@@ -1367,13 +1459,12 @@ int main(int argc, char **argv)
 out:
 	free(priv.rom);
 	free(priv.cart_ram);
-
 	/* If the save file name was automatically generated (which required memory
 	 * allocated on the help), then free it here. */
-	if(argc == 2)
+	if(save_file_name)
 		free(save_file_name);
 
-	if(argc == 1)
+	if(rom_file_name)
 		free(rom_file_name);
 
 	return ret;
