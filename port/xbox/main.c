@@ -1,11 +1,15 @@
 /**
  * MIT License
  * Copyright (c) 2018 Mahyar Koshkouei
+ * Copyright (c) 2020 Ryan Wendland (Original Xbox Port)
  *
  * An example of using the peanut_gb.h library. This example application uses
  * SDL2 to draw the screen and get input.
  */
 
+#ifndef NXDK
+#define NXDK
+#endif
 #include <errno.h>
 
 #include <stdint.h>
@@ -33,16 +37,16 @@
 extern int nextRow;
 extern int nextCol;
 #ifdef DEBUG
-#define printf(fmt, ...) do { /*nextRow = 0;*/ debugPrint(fmt, __VA_ARGS__); Sleep(100); } while(0)
+#define printf(fmt, ...) do { nextRow = 0; debugPrint(fmt, __VA_ARGS__); Sleep(100); } while(0)
 #define puts(a) debugPrint(a)
 #endif
 #include <assert.h>
 #include <windows.h>
-#include <SDL.h>
 #include <nxdk/mount.h>
 #include <hal/xbox.h>
 #include <hal/video.h>
 #include <hal/debug.h>
+#include "menu.h"
 #endif
 
 struct priv_t
@@ -158,15 +162,15 @@ void write_cart_ram_file(const char *save_file_name, uint8_t **dest,
 	if((f = fopen(save_file_name, "wb")) == NULL)
 	{
 		puts("Unable to open save file.");
-		printf("%d: %s\n", __LINE__, strerror(errno));
-		//exit(EXIT_FAILURE);
+		debugPrint("Save file: %s\n", save_file_name);
+		debugPrint("%d: %s\n", __LINE__, strerror(errno));
+		Sleep(1000);
+		return;
 	}
 
 	/* Record save file. */
-	if(f){
-		fwrite(*dest, sizeof(uint8_t), len, f);
-		fclose(f);
-	}
+	fwrite(*dest, sizeof(uint8_t), len, f);
+	fclose(f);
 }
 
 /**
@@ -569,7 +573,7 @@ void manual_assign_palette(struct priv_t *priv, uint8_t selection)
  * Draws scanline into framebuffer.
  */
 void lcd_draw_line(struct gb_s *gb, const uint8_t pixels[160],
-		   const uint_least8_t line)
+		   const uint_fast8_t line)
 {
 	struct priv_t *priv = gb->direct.priv;
 
@@ -675,9 +679,8 @@ int main(int argc, char **argv)
 	int ret = EXIT_SUCCESS;
 
 #ifdef NXDK
-	//XBOX PORT TODO:
-	//SELECTION MENU TO SELECT ROM
-	char* rom_name = "rom.gb";
+	char* rom_name = malloc(256);
+	show_rom_selection_menu(rom_name, 256);
 	rom_file_name = malloc(strlen(XBOX_ROM_PATH) + 1 + strlen(rom_name)+1);
 	sprintf(rom_file_name,"%s\\%s", XBOX_ROM_PATH, rom_name);
 	printf("Opening %s\n",rom_file_name);
@@ -740,51 +743,6 @@ int main(int argc, char **argv)
 		goto out;
 	}
 
-	/* If no save file is specified, copy save file (with specific name) to
-	 * allocated memory. */
-	if(save_file_name == NULL)
-	{
-		char *str_replace;
-		const char extension[] = ".sav";
-
-		/* Allocate enough space for the ROM file name, for the "sav"
-		 * extension and for the null terminator. */
-		#ifdef NXDK
-		save_file_name = malloc(strlen(XBOX_SAVE_PATH) + 1 + strlen(rom_name) + strlen(extension) + 1);
-		#else
-		save_file_name = malloc(strlen(rom_file_name) + strlen(extension) + 1);
-		#endif
-
-		if(save_file_name == NULL)
-		{
-			printf("%d: %s\n", __LINE__, strerror(errno));
-			ret = EXIT_FAILURE;
-			goto out;
-		}
-
-		/* Copy the ROM file name to allocated space. */
-		#ifdef NXDK
-		sprintf(save_file_name,"%s\\%s", XBOX_SAVE_PATH, rom_name);
-		#else
-		strcpy(save_file_name, rom_file_name);
-		#endif
-
-		/* If the file name does not have a dot, or the only dot is at
-		 * the start of the file name, set the pointer to begin
-		 * replacing the string to the end of the file name, otherwise
-		 * set it to the dot. */
-		if((str_replace = strrchr(save_file_name, '.')) == NULL ||
-				str_replace == save_file_name)
-			str_replace = save_file_name + strlen(save_file_name);
-
-		/* Copy extension to string including terminating null byte. */
-		for(unsigned int i = 0; i <= strlen(extension); i++)
-			*(str_replace++) = extension[i];
-
-		printf("Save file name will be %s\n",save_file_name);
-
-	}
-
 	/* TODO: Sanity check input GB file. */
 
 	/* Initialise emulator context. */
@@ -810,6 +768,13 @@ int main(int argc, char **argv)
 		printf("Unknown error: %d\n", gb_ret);
 		ret = EXIT_FAILURE;
 		goto out;
+	}
+
+	if(save_file_name == NULL){
+		char title_str[28];
+		gb_get_rom_name(&gb, title_str);
+		save_file_name = malloc(strlen(XBOX_SAVE_PATH) + strlen(title_str) + strlen(".sav") + 1);
+		sprintf(save_file_name,"%s\\%s.sav", XBOX_SAVE_PATH, title_str);
 	}
 
 	/* Load Save File. */
@@ -1022,7 +987,7 @@ int main(int argc, char **argv)
 	SDL_Rect message_rect; //create a rect
 	message_rect.x = 0;
 	message_rect.y = 0;
-	char message_text[32] = {0};
+	char message_text[256] = {0};
 	unsigned int message_timer = 0;
 
 	snprintf(message_text, sizeof(message_text), "STARTING %s", rom_name);
