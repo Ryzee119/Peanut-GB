@@ -21,9 +21,9 @@ make
 ```
 Compiled xbe can be found in `Peanut-GB/port/xbox/bin/`
 
-It is currently hard coded to look for `rom.gb` within the same directory as the `default.xbe`.
+It is currently hard coded to look for `rom.gb` within `Peanut-GB/Roms/`.
 
-Save files will be saved to `E:\rom.sav`
+Save files will be saved to `Peanut-GB/Saves/*.sav`
 
 Controls are as expected, with some additions:
 
@@ -32,4 +32,4 @@ Controls are as expected, with some additions:
  - Y - Toggle Frame Skip on or Off
  - BACK+START - Reset Gameboy
  - BACK+Y - Save screenshot to E:\
-  - BACK+DUP - Cycle through color palettes
+ - BACK+DUP/DDOWN - Cycle through color palettes
