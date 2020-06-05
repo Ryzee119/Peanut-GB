@@ -769,7 +769,7 @@ int main(int argc, char **argv)
 		ret = EXIT_FAILURE;
 		goto out;
 	}
-
+	//FIXME: cart titles arent always unique.
 	if(save_file_name == NULL){
 		char title_str[28];
 		gb_get_rom_name(&gb, title_str);
