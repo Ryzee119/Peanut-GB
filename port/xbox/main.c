@@ -6,7 +6,6 @@
  * An example of using the peanut_gb.h library. This example application uses
  * SDL2 to draw the screen and get input.
  */
-
 #ifndef NXDK
 #define NXDK
 #endif
@@ -769,12 +768,14 @@ int main(int argc, char **argv)
 		ret = EXIT_FAILURE;
 		goto out;
 	}
-	//FIXME: cart titles arent always unique.
+
 	if(save_file_name == NULL){
 		char title_str[28];
+		unsigned char headerchecksum =  gb_rom_read(&gb, 0x014D);
 		gb_get_rom_name(&gb, title_str);
-		save_file_name = malloc(strlen(XBOX_SAVE_PATH) + strlen(title_str) + strlen(".sav") + 1);
-		sprintf(save_file_name,"%s\\%s.sav", XBOX_SAVE_PATH, title_str);
+		save_file_name = malloc(strlen(XBOX_SAVE_PATH) + strlen(title_str) +
+		                 sizeof(headerchecksum) + strlen(".sav") + 1);
+		sprintf(save_file_name,"%s\\%s_%02x.sav", XBOX_SAVE_PATH, title_str, headerchecksum);
 	}
 
 	/* Load Save File. */
