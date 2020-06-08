@@ -163,7 +163,6 @@ void write_cart_ram_file(const char *save_file_name, uint8_t **dest,
 		puts("Unable to open save file.");
 		debugPrint("Save file: %s\n", save_file_name);
 		debugPrint("%d: %s\n", __LINE__, strerror(errno));
-		Sleep(1000);
 		return;
 	}
 
@@ -722,8 +721,8 @@ int main(int argc, char **argv)
 		char title_str[28];
 		unsigned char headerchecksum =  gb_rom_read(&gb, 0x014D);
 		gb_get_rom_name(&gb, title_str);
-		save_file_name = malloc(strlen(XBOX_SAVE_PATH) + strlen(title_str) +
-		                 sizeof(headerchecksum) + strlen(".sav") + 1);
+		save_file_name = malloc(strlen(XBOX_SAVE_PATH) + 1 + strlen(title_str) +
+		                 1 + 2 + strlen(".sav") + 1);
 		sprintf(save_file_name,"%s\\%s_%02x.sav", XBOX_SAVE_PATH, title_str, headerchecksum);
 	}
 
