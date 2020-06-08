@@ -21,7 +21,7 @@ make
 ```
 Compiled xbe can be found in `Peanut-GB/port/xbox/bin/`
 
-It is currently hard coded to look for `rom.gb` within `Peanut-GB/Roms/`.
+It is currently hard coded to look for Roms within `Peanut-GB/Roms/`.
 
 Save files will be saved to `Peanut-GB/Saves/*.sav`
 
