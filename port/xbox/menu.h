@@ -48,6 +48,7 @@ static SDL_Color White = {255, 255, 255};
 static SDL_Color Dark_Gray = {30, 30, 30};
 static SDL_Color Gray = {70, 70, 70};
 static SDL_Color Yellow = {202, 179, 136};
+static SDL_Color Green = {152, 251, 152};
 
 static SDL_Window *menu_window;
 static SDL_Renderer *menu_renderer;
@@ -227,7 +228,7 @@ void show_item_selection_menu(char* item_name, int max_len) {
                          //Then redraw the text on top of the highlight box. This seems messy
                         } else {
                             int h = create_text(ITEM_TEXT_SIZE, item_string, Dark_Gray, XMARGIN, ypos);
-                            create_box(XMARGIN, ypos, SCREEN_WIDTH - XMARGIN*2, h, White, 255);
+                            create_box(XMARGIN, ypos, SCREEN_WIDTH - XMARGIN*2, h, Green, 255);
                             ypos += create_text(ITEM_TEXT_SIZE, item_string, Dark_Gray, XMARGIN, ypos);
                         }
 
