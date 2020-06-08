@@ -25,27 +25,27 @@ SOFTWARE.
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <windows.h>
-   #include <hal/debug.h>
+#include <hal/debug.h>
 
 #define ALIGN_CENTER -1
 
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 #define XMARGIN (SCREEN_WIDTH * 0.10)
-#define YMARGIN (SCREEN_HEIGHT * 0.075)
-#define MAX_ROMS_PER_SCREEN 13 //FIXME: SHOULD BE A FUNCTION OF TEXT SIZE/BOX HEIGHT
-#define MAX_ROMS_TEXT_WIDTH (SCREEN_WIDTH - 2 * XMARGIN)
+#define YMARGIN (SCREEN_HEIGHT * 0.05)
+#define MAX_ITEMS_PER_SCREEN 13 //FIXME: SHOULD BE A FUNCTION OF TEXT SIZE/BOX HEIGHT
+#define MAX_ITEM_TEXT_WIDTH (SCREEN_WIDTH - 2 * XMARGIN)
 
-#define ROM_PATH "D:\\Roms\\*.gb"
-#define MAX_ROMS 2048
+#define ITEM_PATH "D:\\Roms\\*.*"
+#define MAX_ITEMS 2048
 
-#define ROM_TEXT_SIZE 18
+#define ITEM_TEXT_SIZE 18
 #define HEADING2_TEXT_SIZE 25
 #define HEADING1_TEXT_SIZE 32
 #define LOADING_TEXT_SIZE 40
 
 static SDL_Color White = {255, 255, 255};
-static SDL_Color Dark_Gray = {20, 20, 20};
+static SDL_Color Dark_Gray = {30, 30, 30};
 static SDL_Color Gray = {70, 70, 70};
 static SDL_Color Yellow = {202, 179, 136};
 
@@ -64,8 +64,8 @@ static int create_text(int size, char* text, SDL_Color font_color, int x, int y)
     (y == ALIGN_CENTER) ? (rect.y =  SCREEN_HEIGHT / 2 - rect.h / 2) : (rect.y = y);
 
     //Cap the text length
-    if (rect.w > MAX_ROMS_TEXT_WIDTH)
-        rect.w = MAX_ROMS_TEXT_WIDTH;
+    if (rect.w > MAX_ITEM_TEXT_WIDTH)
+        rect.w = MAX_ITEM_TEXT_WIDTH;
 
     //Copy into renderer
     SDL_RenderCopy(menu_renderer, texture, NULL, &rect);
@@ -99,7 +99,7 @@ static void sort(char** string_array, int len) {
     qsort(string_array, len, sizeof(char*), compare); 
 }
 
-void show_rom_selection_menu(char* rom_name, int max_len) {
+void show_item_selection_menu(char* item_name, int max_len) {
     /* Init and Setup our SDL Libraries */
     TTF_Init();
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
@@ -112,55 +112,60 @@ void show_rom_selection_menu(char* rom_name, int max_len) {
                             SCREEN_WIDTH, SCREEN_HEIGHT,
                             SDL_WINDOW_SHOWN);
 
-    menu_renderer = SDL_CreateRenderer(menu_window, ALIGN_CENTER, 0);
+    menu_renderer = SDL_CreateRenderer(menu_window, -1, 0);
     SDL_SetRenderDrawColor(menu_renderer, 15, 15, 15, 255);
     SDL_RenderClear(menu_renderer);
 
     /* Create the Menu Text Headings */
     int ypos = YMARGIN;
-    ypos += create_text(HEADING1_TEXT_SIZE, "Peanut-GB for Xbox", White, -1, ypos);
-    ypos += create_box(0, ypos, SCREEN_WIDTH, 5, Gray, 255); 
-    ypos += create_text(HEADING2_TEXT_SIZE, "Select your Gameboy ROM:", White, XMARGIN, ypos);
+    ypos += create_text(HEADING1_TEXT_SIZE, "Peanut-GB for Xbox", White, ALIGN_CENTER, ypos);
+    ypos += create_text(14, "A Game Boy (DMG) emulator", White, ALIGN_CENTER, ypos);
+    ypos += create_box(0, ypos, SCREEN_WIDTH, 3, White, 255); 
     create_box(XMARGIN, ypos, SCREEN_WIDTH - XMARGIN*2, SCREEN_HEIGHT - YMARGIN - ypos, Gray, 255); 
-    int first_rom_pos = ypos; //Store this position so we can revert to it when we redraw the rom list
+    int first_item_pos = ypos; //Store this position so we can revert to it when we redraw the item list
 
     /* Start searching for files and populate them in a list */
+    //TODO: Handle sub directories
     WIN32_FIND_DATA findFileData;
     HANDLE hFind;
-    hFind = FindFirstFile(ROM_PATH, &findFileData);
+    hFind = FindFirstFile(ITEM_PATH, &findFileData);
     if (hFind == INVALID_HANDLE_VALUE) {
-        create_text(ROM_TEXT_SIZE, "Place some games in the Roms directory", White, XMARGIN, ypos);
+        create_text(ITEM_TEXT_SIZE, "Place some games in the Item directory", White, XMARGIN, ypos);
         SDL_RenderPresent(menu_renderer);
         while (1) {Sleep(1000);}
     }
-    int rom_cnt = 0;
-    char **rom_array = malloc(MAX_ROMS * sizeof(char *));
-    if (!rom_array) {
-        debugPrint("Error allocating rom_array. Too many roms?\n");
+    int item_cnt = 0;
+    char **item_array = malloc(MAX_ITEMS * sizeof(char *));
+    if (!item_array) {
+        debugPrint("Error allocating item_array. Too many items?\n");
         while (1);
     }
     do {
         if (!(findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-            rom_array[rom_cnt] = (char *)malloc(strlen(findFileData.cFileName) + 1);
-            if (!rom_array[rom_cnt]) {
-                debugPrint("Error allocating rom_array. Too many roms?\n");
+            item_array[item_cnt] = (char *)malloc(strlen(findFileData.cFileName) + 1);
+            if (item_array[item_cnt] == NULL) {
+                debugPrint("Error allocating item_array. Too many items?\n");
                 while (1);
             }
-            strncpy(rom_array[rom_cnt], findFileData.cFileName, 256);
-            rom_cnt++;
-    } while (FindNextFile(hFind, &findFileData) != 0 && rom_cnt < MAX_ROMS);
-    sort(rom_array, rom_cnt); //FindNextFile isnt neccessarily alphabetical. sort it
+            strncpy(item_array[item_cnt], findFileData.cFileName, strlen(findFileData.cFileName) + 1);
+            item_cnt++;
+    } while (FindNextFile(hFind, &findFileData) != 0 && item_cnt < MAX_ITEMS);
+
+    //FindNextFile isnt neccessarily alphabetical. sort it
+    sort(item_array, item_cnt); 
+
+    //Calculate how many pages it should have
     int num_pages = 0;
-    while ((num_pages + 1) * MAX_ROMS_PER_SCREEN  < rom_cnt)
+    while ((num_pages + 1) * MAX_ITEMS_PER_SCREEN  < item_cnt)
         num_pages++;
 
     /* Main Render and Input Loop */
-    bool rom_selected = false;
+    bool item_selected = false;
     int page_num = 0;
     int cursor_pos = 0;
     bool render_screen = true;
     SDL_ControllerButtonEvent *controller_button;
-    while (!rom_selected) {
+    while (!item_selected) {
         static SDL_Event e;
         while (SDL_PollEvent(&e)) {
              if (e.type == SDL_CONTROLLERBUTTONDOWN) {
@@ -177,8 +182,8 @@ void show_rom_selection_menu(char* rom_name, int max_len) {
                     cursor_pos = 0;
                 }
                 else if (controller_button->button == SDL_CONTROLLER_BUTTON_DPAD_DOWN) {
-                    if (cursor_pos < MAX_ROMS_PER_SCREEN - 1 &&
-                        page_num * MAX_ROMS_PER_SCREEN + cursor_pos < rom_cnt - 1) {
+                    if (cursor_pos < MAX_ITEMS_PER_SCREEN - 1 &&
+                        page_num * MAX_ITEMS_PER_SCREEN + cursor_pos < item_cnt - 1) {
                         cursor_pos++;
                     }
                 }
@@ -188,44 +193,46 @@ void show_rom_selection_menu(char* rom_name, int max_len) {
                 }
                 else if (controller_button->button == SDL_CONTROLLER_BUTTON_A ||
                         controller_button->button == SDL_CONTROLLER_BUTTON_START) {
-                    rom_selected = true;
+                    item_selected = true;
                 }
              }
         }
 
-        if (render_screen || rom_selected) {
+        if (render_screen || item_selected) {
             render_screen = false;
 
-            ypos = first_rom_pos;
+            ypos = first_item_pos;
             create_box(XMARGIN, ypos, SCREEN_WIDTH - XMARGIN * 2, SCREEN_HEIGHT - YMARGIN - ypos, Gray, 255);
 
-            //
             static char pageofpage[32];
             snprintf(pageofpage,sizeof(pageofpage),"Page %u of %u", page_num + 1, num_pages + 1);
-            create_text(ROM_TEXT_SIZE * 0.75, pageofpage, Yellow, XMARGIN, SCREEN_HEIGHT - YMARGIN * 1.5);
+            create_text(ITEM_TEXT_SIZE * 0.75, pageofpage, Yellow, XMARGIN, SCREEN_HEIGHT - YMARGIN * 1.75);
+
             //Start creating the list of files for the current page
-            for (int i = 0 ; i < MAX_ROMS_PER_SCREEN; i++) {
-                int rom_offset = page_num * MAX_ROMS_PER_SCREEN + i;
-                if (rom_offset < rom_cnt) {
-                    char* rom_string = rom_array[rom_offset];
-                    //If the current rom is where the cursor is, draw a box around it
+            for (int i = 0 ; i < MAX_ITEMS_PER_SCREEN; i++) {
+                int item_offset = page_num * MAX_ITEMS_PER_SCREEN + i;
+                if (item_offset < item_cnt) {
+                    char* item_string = item_array[item_offset];
+
                     if (i == cursor_pos) {
-                        //If you seleted this rom, we're done
-                        if (rom_selected) {
-                            strncpy(rom_name, rom_string, max_len);
-                            create_box(XMARGIN, first_rom_pos, SCREEN_WIDTH - XMARGIN*2,
-                                        SCREEN_HEIGHT - YMARGIN - first_rom_pos, Gray, 255); 
+                        //If you seleted this item, we're done
+                        if (item_selected) {
+                            strncpy(item_name, item_string, max_len);
+                            create_box(XMARGIN, first_item_pos, SCREEN_WIDTH - XMARGIN*2,
+                                        SCREEN_HEIGHT - YMARGIN - first_item_pos, Gray, 255); 
                             create_text(LOADING_TEXT_SIZE, "LOADING", White, ALIGN_CENTER, ALIGN_CENTER);
                             break;
+
+                        //Draw text so we get its height, then use that to draw the highlight box
+                         //Then redraw the text on top of the highlight box. This seems messy
                         } else {
-                            //Draw text so we get its height, then use that to draw the highlight box
-                            //Then redraw the text on top of the highlight box. This seems messy
-                            int h = create_text(ROM_TEXT_SIZE, rom_string, Dark_Gray, XMARGIN, ypos);
+                            int h = create_text(ITEM_TEXT_SIZE, item_string, Dark_Gray, XMARGIN, ypos);
                             create_box(XMARGIN, ypos, SCREEN_WIDTH - XMARGIN*2, h, White, 255);
-                            ypos += create_text(ROM_TEXT_SIZE, rom_string, Dark_Gray, XMARGIN, ypos);
+                            ypos += create_text(ITEM_TEXT_SIZE, item_string, Dark_Gray, XMARGIN, ypos);
                         }
+
                     } else {
-                        ypos += create_text(ROM_TEXT_SIZE, rom_string, White, XMARGIN, ypos); 
+                        ypos += create_text(ITEM_TEXT_SIZE, item_string, White, XMARGIN, ypos); 
                     }
                 }
             }
@@ -239,9 +246,9 @@ void show_rom_selection_menu(char* rom_name, int max_len) {
 
     //Exiting the menu, clean everything up.
     //Gameboy emulator will reinit SDL libs as required.
-    for (int i = 0; i < rom_cnt; i++) {
-        free(rom_array[i]);
-    } free(rom_array);
+    for (int i = 0; i < item_cnt; i++) {
+        free(item_array[i]);
+    } free(item_array);
 
     if (menu_renderer)
         SDL_DestroyRenderer(menu_renderer);

@@ -36,7 +36,7 @@
 extern int nextRow;
 extern int nextCol;
 #ifdef DEBUG
-#define printf(fmt, ...) do { nextRow = 0; debugPrint(fmt, __VA_ARGS__); Sleep(100); } while(0)
+#define printf(fmt, ...) do { nextRow = 12; debugPrint(fmt, __VA_ARGS__); Sleep(100); } while(0)
 #define puts(a) debugPrint(a)
 #endif
 #include <assert.h>
@@ -677,63 +677,12 @@ int main(int argc, char **argv)
 	char *save_file_name = NULL;
 	int ret = EXIT_SUCCESS;
 
-#ifdef NXDK
 	char* rom_name = malloc(256);
-	show_rom_selection_menu(rom_name, 256);
+	show_item_selection_menu(rom_name, 256);
 	rom_file_name = malloc(strlen(XBOX_ROM_PATH) + 1 + strlen(rom_name)+1);
 	sprintf(rom_file_name,"%s\\%s", XBOX_ROM_PATH, rom_name);
 	printf("Opening %s\n",rom_file_name);
-#else
-	switch(argc)
-	{
-#if ENABLE_FILE_GUI
 
-	case 1:
-	{
-		/* Invoke file picker */
-		nfdresult_t result =
-			NFD_OpenDialog("gb,gbc", NULL, &rom_file_name);
-
-		if(result == NFD_CANCEL)
-		{
-			puts("No ROM selected.");
-			exit(EXIT_FAILURE);
-		}
-		else if(result != NFD_OKAY)
-		{
-			printf("Error: %s\n", NFD_GetError());
-			exit(EXIT_FAILURE);
-		}
-	}
-	break;
-#endif
-
-	case 2:
-		/* Apply file name to rom_file_name
-		 * Set save_file_name to NULL. */
-		rom_file_name = argv[1];
-		break;
-
-	case 3:
-		/* Apply file name to rom_file_name
-		 * Apply save name to save_file_name */
-		rom_file_name = argv[1];
-		save_file_name = argv[2];
-		break;
-
-	default:
-#if ENABLE_FILE_GUI
-		printf("Usage: %s [ROM] [SAVE]\n", argv[0]);
-		puts("A file picker is presented if ROM is not given.");
-#else
-		printf("Usage: %s ROM [SAVE]\n", argv[0]);
-#endif
-		puts("SAVE is set by default if not provided.");
-		ret = EXIT_FAILURE;
-		goto out;
-	}
-
-#endif
 	/* Copy input ROM file to allocated memory. */
 	if((priv.rom = read_rom_to_ram(rom_file_name)) == NULL)
 	{
@@ -785,35 +734,11 @@ int main(int argc, char **argv)
 	{
 		time_t rawtime;
 		time(&rawtime);
-#ifdef _POSIX_C_SOURCE
-		struct tm timeinfo;
-		localtime_r(&rawtime, &timeinfo);
-#else
 		struct tm *timeinfo;
 		timeinfo = localtime(&rawtime);
-#endif
 
-		/* You could potentially force the game to allow the player to
-		 * reset the time by setting the RTC to invalid values.
-		 *
-		 * Using memset(&gb->cart_rtc, 0xFF, sizeof(gb->cart_rtc)) for
-		 * example causes Pokemon Gold/Silver to say "TIME NOT SET",
-		 * allowing the player to set the time without having some dumb
-		 * password.
-		 *
-		 * The memset has to be done directly to gb->cart_rtc because
-		 * gb_set_rtc() processes the input values, which may cause
-		 * games to not detect invalid values.
-		 */
-
-		/* Set RTC. Only games that specify support for RTC will use
-		 * these values. */
-#ifdef _POSIX_C_SOURCE
-		gb_set_rtc(&gb, &timeinfo);
-#else
 		if(timeinfo)
 			gb_set_rtc(&gb, timeinfo);
-#endif
 	}
 
 	/* Initialise frontend implementation, in this case, SDL2. */
@@ -860,14 +785,6 @@ int main(int argc, char **argv)
 
 	/* Allow the joystick input even if game is in background. */
 	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
-
-	#ifndef NXDK
-	if(SDL_GameControllerAddMappingsFromFile("gamecontrollerdb.txt") < 0)
-	{
-		printf("Unable to assign joystick mappings: %s\n",
-		       SDL_GetError());
-	}
-	#endif
 
 	/* Open the first available controller. */
 	for(int i = 0; i < SDL_NumJoysticks(); i++)
@@ -1107,175 +1024,6 @@ int main(int argc, char **argv)
 					}
 					break;
 				}
-				break;
-
-			case SDL_KEYDOWN:
-				switch(event.key.keysym.sym)
-				{
-				case SDLK_RETURN:
-					gb.direct.joypad_bits.start = 0;
-					break;
-
-				case SDLK_BACKSPACE:
-					gb.direct.joypad_bits.select = 0;
-					break;
-
-				case SDLK_z:
-					gb.direct.joypad_bits.a = 0;
-					break;
-
-				case SDLK_x:
-					gb.direct.joypad_bits.b = 0;
-					break;
-
-				case SDLK_UP:
-					gb.direct.joypad_bits.up = 0;
-					break;
-
-				case SDLK_RIGHT:
-					gb.direct.joypad_bits.right = 0;
-					break;
-
-				case SDLK_DOWN:
-					gb.direct.joypad_bits.down = 0;
-					break;
-
-				case SDLK_LEFT:
-					gb.direct.joypad_bits.left = 0;
-					break;
-
-				case SDLK_SPACE:
-					fast_mode = 2;
-					break;
-
-				case SDLK_1:
-					fast_mode = 1;
-					break;
-
-				case SDLK_2:
-					fast_mode = 2;
-					break;
-
-				case SDLK_3:
-					fast_mode = 3;
-					break;
-
-				case SDLK_4:
-					fast_mode = 4;
-					break;
-
-				case SDLK_r:
-					gb_reset(&gb);
-					break;
-#if ENABLE_LCD
-
-				case SDLK_i:
-					gb.direct.interlace = ~gb.direct.interlace;
-					break;
-
-				case SDLK_o:
-					gb.direct.frame_skip = ~gb.direct.frame_skip;
-					break;
-
-				case SDLK_b:
-					dump_bmp = ~dump_bmp;
-
-					if(dump_bmp)
-						puts("Dumping frames");
-					else
-						printf("\nStopped dumping frames\n");
-
-					break;
-#endif
-
-				case SDLK_p:
-					if(event.key.keysym.mod == KMOD_LSHIFT)
-					{
-						auto_assign_palette(&priv, gb_colour_hash(&gb));
-						break;
-					}
-
-					if(++selected_palette == NUMBER_OF_PALETTES)
-						selected_palette = 0;
-
-					manual_assign_palette(&priv, selected_palette);
-					break;
-				}
-
-				break;
-
-			case SDL_KEYUP:
-				switch(event.key.keysym.sym)
-				{
-				case SDLK_RETURN:
-					gb.direct.joypad_bits.start = 1;
-					break;
-
-				case SDLK_BACKSPACE:
-					gb.direct.joypad_bits.select = 1;
-					break;
-
-				case SDLK_z:
-					gb.direct.joypad_bits.a = 1;
-					break;
-
-				case SDLK_x:
-					gb.direct.joypad_bits.b = 1;
-					break;
-
-				case SDLK_UP:
-					gb.direct.joypad_bits.up = 1;
-					break;
-
-				case SDLK_RIGHT:
-					gb.direct.joypad_bits.right = 1;
-					break;
-
-				case SDLK_DOWN:
-					gb.direct.joypad_bits.down = 1;
-					break;
-
-				case SDLK_LEFT:
-					gb.direct.joypad_bits.left = 1;
-					break;
-
-				case SDLK_SPACE:
-					fast_mode = 1;
-					break;
-
-				case SDLK_f:
-					if(fullscreen)
-					{
-						SDL_SetWindowFullscreen(window, 0);
-						fullscreen = 0;
-						SDL_ShowCursor(SDL_ENABLE);
-					}
-					else
-					{
-						SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
-						fullscreen = SDL_WINDOW_FULLSCREEN_DESKTOP;
-						SDL_ShowCursor(SDL_DISABLE);
-					}
-					break;
-
-				case SDLK_F11:
-				{
-					if(fullscreen)
-					{
-						SDL_SetWindowFullscreen(window, 0);
-						fullscreen = 0;
-						SDL_ShowCursor(SDL_ENABLE);
-					}
-					else
-					{
-						SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN);
-						fullscreen = SDL_WINDOW_FULLSCREEN;
-						SDL_ShowCursor(SDL_DISABLE);
-					}
-				}
-				break;
-				}
-
 				break;
 			}
 		}

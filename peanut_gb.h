@@ -373,13 +373,11 @@ struct gb_s
 		unsigned int	gb_ime : 1;
 		unsigned int	gb_bios_enable : 1;
 		unsigned int	gb_frame : 1; /* New frame drawn. */
-		enum
-		{
-			LCD_HBLANK = 0,
-			LCD_VBLANK = 1,
-			LCD_SEARCH_OAM = 2,
-			LCD_TRANSFER = 3
-		}				lcd_mode : 3; //: 2 to : 3 needed for NXDK compiler
+#		define LCD_HBLANK	0
+#		define LCD_VBLANK	1
+#		define LCD_SEARCH_OAM	2
+#		define LCD_TRANSFER	3
+		unsigned char	lcd_mode : 2;
 	};
 
 	/* Cartridge information:
