@@ -159,8 +159,8 @@ void write_cart_ram_file(const char *save_file_name, uint8_t **dest,
 	if((f = fopen(save_file_name, "wb")) == NULL)
 	{
 		puts("Unable to open save file.");
-		debugPrint("Save file: %s\n", save_file_name);
-		debugPrint("%d: %s\n", __LINE__, strerror(errno));
+		printf("%d: %s\n", __LINE__, strerror(errno));
+		//exit(EXIT_FAILURE);
 		return;
 	}
 
@@ -203,7 +203,7 @@ void gb_error(struct gb_s *gb, const enum gb_error_e gb_err, const uint16_t val)
 	if(getchar() == 'q')
 	{
 		/* Record save file. */
-		write_cart_ram_file("recovery.sav", &priv->cart_ram,
+		write_cart_ram_file("D:\\recovery.sav", &priv->cart_ram,
 				    gb_get_save_size(gb));
 
 		free(priv->rom);
