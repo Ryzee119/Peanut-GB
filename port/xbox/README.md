@@ -30,6 +30,7 @@ Controls are as expected, with some additions:
  - White - Decrease Game Speed
  - Black - Increase Game Speed
  - Y - Toggle Frame Skip on or Off
- - BACK+START - Reset Gameboy
+ - BACK+START - Exit to Main Menu
  - BACK+Y - Save screenshot to E:\
  - BACK+DUP/DDOWN - Cycle through color palettes
+ - BACK+DLEFT - Assign auto color palette is available

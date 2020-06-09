@@ -10,7 +10,6 @@
 #define NXDK
 #endif
 #include <errno.h>
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,12 +18,8 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
-#ifdef ENABLE_SOUND_BLARGG
-#	include "blargg_apu/audio.h"
-#elif defined ENABLE_SOUND_MINIGB
-#	include "minigb_apu/minigb_apu.h"
-#endif
 
+#include "minigb_apu/minigb_apu.h"
 #include "../../peanut_gb.h"
 
 #ifndef NXDK
@@ -33,6 +28,9 @@
 #define XBOX_SAVE_PATH "D:\\Saves"
 #define XBOX_ROM_PATH "D:\\Roms"
 #define XBOX_SCREENSHOT_PATH "D:\\Screenshots"
+#define MENU_FONT_PATH "D:\\font.ttf"
+#define XBOX_SCREEN_WIDTH 640
+#define XBOX_SCREEN_HEIGHT 480
 extern int nextRow;
 extern int nextCol;
 #ifdef DEBUG
@@ -627,9 +625,8 @@ void save_lcd_bmp(struct gb_s* gb, uint16_t fb[LCD_HEIGHT][LCD_WIDTH])
 
 int main(int argc, char **argv)
 {
-	#ifdef NXDK
-	XVideoSetMode(640, 480, 15, REFRESH_DEFAULT);
-	size_t fb_size = 640 * 480 * sizeof(uint16_t);
+	XVideoSetMode(XBOX_SCREEN_WIDTH, XBOX_SCREEN_HEIGHT, 15, REFRESH_DEFAULT);
+	size_t fb_size = XBOX_SCREEN_WIDTH * XBOX_SCREEN_HEIGHT * sizeof(uint16_t);
 	extern uint8_t* _fb;
 	_fb = (uint8_t*)MmAllocateContiguousMemoryEx(fb_size,
 	                                            0,
@@ -645,11 +642,6 @@ int main(int argc, char **argv)
 	CreateDirectoryA(XBOX_SAVE_PATH, NULL);
 	CreateDirectoryA(XBOX_SCREENSHOT_PATH, NULL);
 	CreateDirectoryA(XBOX_ROM_PATH, NULL);
-
-	printf("Created %s\n",XBOX_SAVE_PATH);
-	printf("Created %s\n",XBOX_SCREENSHOT_PATH);
-	printf("Created %s\n",XBOX_ROM_PATH);
-	#endif
 
 	struct gb_s gb;
 	struct priv_t priv =
@@ -676,12 +668,23 @@ int main(int argc, char **argv)
 	char *save_file_name = NULL;
 	int ret = EXIT_SUCCESS;
 
+
+	menu_settings settings;
+	strcpy(settings.title, "Peanut-GB for Xbox");
+	strcpy(settings.sub_title, "A Game Boy (DMG) emulator");
+	strcpy(settings.item_path, XBOX_ROM_PATH);
+	strcpy(settings.font_path, MENU_FONT_PATH);
+	settings.screen_width = XBOX_SCREEN_WIDTH;
+	settings.screen_height = XBOX_SCREEN_HEIGHT;
+	settings.max_items = 2048;
+	init_menu(&settings);
 	char* rom_name = malloc(256);
+start:
 	show_item_selection_menu(rom_name, 256);
-	rom_file_name = malloc(strlen(XBOX_ROM_PATH) + 1 + strlen(rom_name)+1);
+	rom_file_name = malloc(strlen(XBOX_ROM_PATH) + 1 + strlen(rom_name) + 1);
 	sprintf(rom_file_name,"%s\\%s", XBOX_ROM_PATH, rom_name);
 	printf("Opening %s\n",rom_file_name);
-
+	running = 1;
 	/* Copy input ROM file to allocated memory. */
 	if((priv.rom = read_rom_to_ram(rom_file_name)) == NULL)
 	{
@@ -718,11 +721,11 @@ int main(int argc, char **argv)
 	}
 
 	if(save_file_name == NULL){
-		char title_str[28];
+		char title_str[32];
 		unsigned char headerchecksum =  gb_rom_read(&gb, 0x014D);
 		gb_get_rom_name(&gb, title_str);
 		save_file_name = malloc(strlen(XBOX_SAVE_PATH) + 1 + strlen(title_str) +
-		                 1 + 2 + strlen(".sav") + 1);
+		                 1/*_*/ + 2/*FF*/ + strlen(".sav") + 1/*TERMINATOR*/);
 		sprintf(save_file_name,"%s\\%s_%02x.sav", XBOX_SAVE_PATH, title_str, headerchecksum);
 	}
 
@@ -748,13 +751,7 @@ int main(int argc, char **argv)
 		goto out;
 	}
 
-#if ENABLE_SOUND
 	SDL_AudioDeviceID dev;
-#endif
-
-#ifdef ENABLE_SOUND_BLARGG
-	audio_init(&dev);
-#elif defined ENABLE_SOUND_MINIGB
 	{
 		SDL_AudioSpec want, have;
 
@@ -776,7 +773,6 @@ int main(int argc, char **argv)
 		audio_init();
 		SDL_PauseAudioDevice(dev, 0);
 	}
-#endif
 
 #if ENABLE_LCD
 	gb_init_lcd(&gb, &lcd_draw_line);
@@ -816,7 +812,7 @@ int main(int argc, char **argv)
 		window = SDL_CreateWindow(title_str,
 					  SDL_WINDOWPOS_UNDEFINED,
 					  SDL_WINDOWPOS_UNDEFINED,
-					  640, 480,
+					  XBOX_SCREEN_WIDTH, XBOX_SCREEN_HEIGHT,
 					  SDL_WINDOW_SHOWN);
 		#else
 		window = SDL_CreateWindow(title_str,
@@ -891,7 +887,7 @@ int main(int argc, char **argv)
 	#endif
 
 	TTF_Init();
-	TTF_Font* font = TTF_OpenFont("D:\\font.ttf", 20);
+	TTF_Font* font = TTF_OpenFont(MENU_FONT_PATH, 20);
 	if (font == NULL) {
 		debugPrint("Couldn't load font: %s", TTF_GetError());
 		while(1);
@@ -951,10 +947,7 @@ int main(int argc, char **argv)
 				case SDL_CONTROLLER_BUTTON_START:
 					gb.direct.joypad_bits.start = !event.cbutton.state;
 					if (!gb.direct.joypad_bits.select && event.type == SDL_CONTROLLERBUTTONDOWN){
-						snprintf(message_text, sizeof(message_text), "SAVING RAM TO %s", save_file_name);
-						message_timer = SDL_GetTicks();
-						write_cart_ram_file(save_file_name, &priv.cart_ram, gb_get_save_size(&gb));
-						gb_reset(&gb);
+						running = 0;
 					}
 					break;
 
@@ -1005,7 +998,7 @@ int main(int argc, char **argv)
 					break;
 
 				case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
-					if (fast_mode < 4 && event.type == SDL_CONTROLLERBUTTONDOWN) fast_mode++;
+					if (fast_mode < 8 && event.type == SDL_CONTROLLERBUTTONDOWN) fast_mode++;
 					snprintf(message_text, sizeof(message_text), "SPEED %u", fast_mode);
 					message_timer = SDL_GetTicks();
 					break;
@@ -1050,11 +1043,6 @@ int main(int argc, char **argv)
 
 		fast_mode_timer = fast_mode;
 
-#if ENABLE_SOUND_BLARGG
-		/* Process audio. */
-		audio_frame();
-#endif
-
 #if ENABLE_LCD
 		/* Copy frame buffer to SDL screen. */
 		SDL_UpdateTexture(texture, NULL, &priv.fb, LCD_WIDTH * sizeof(uint16_t));
@@ -1075,6 +1063,9 @@ int main(int argc, char **argv)
 		/* Copy the message box to the renderer */
 		SDL_RenderCopy(renderer, message_texture, NULL, &message_rect);
 
+		#ifdef NXDK
+		XVideoWaitForVBlank();
+		#endif
 		SDL_RenderPresent(renderer);
 
 		SDL_FreeSurface(message_surface);
@@ -1157,6 +1148,9 @@ int main(int argc, char **argv)
 		}
 	}
 
+	SDL_PauseAudioDevice(dev, 1);
+	SDL_Delay(100);
+	SDL_CloseAudioDevice(dev);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_DestroyTexture(texture);
@@ -1179,6 +1173,9 @@ out:
 
 	if(rom_file_name)
 		free(rom_file_name);
+
+
+	goto start;
 
 	return ret;
 }
