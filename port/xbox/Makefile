@@ -2,7 +2,6 @@ XBE_TITLE = Peanut-GB
 GEN_XISO = $(XBE_TITLE).iso
 
 NXDK_SDL = y
-NXDK_STACKSIZE=131072
 
 SRCS +=	main.c \
         ../../examples/sdl2/minigb_apu/minigb_apu.c
@@ -11,6 +10,7 @@ CFLAGS += -I../../examples/sdl2
 CFLAGS += -O2
 CFLAGS += -DENABLE_SOUND -DENABLE_SOUND_MINIGB
 CFLAGS += -DENABLE_LCD
+LDFLAGS += -stack:131072
 
 new_all: copy_resources all
 
